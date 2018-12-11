@@ -65,7 +65,7 @@ Your appsettings.json file should look like this
 }
 ```
 
-For local development and debugging MicrosoftAppId and MicrosoftAppPassword can be empty, these settings are used in Azure deployment.
+<b>Note:</b> For local development and debugging MicrosoftAppId and MicrosoftAppPassword MUST be empty, these settings are used in Azure deployment.
 
 #### Getting dirty (let's code!)
 
