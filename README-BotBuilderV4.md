@@ -69,154 +69,170 @@ For local development and debugging MicrosoftAppId and MicrosoftAppPassword can 
 
 #### Getting dirty (let's code!)
 
-1. In the Startup.cs file replace line 39 with:
+1. In the Startup.cs file, search for: `// TODO: ADD SETTINGS` and replace the line with:
 
-```csharp
-Settings.MicrosoftAppId = Configuration.GetSection("MicrosoftAppId")?.Value;
-Settings.MicrosoftAppPassword = Configuration.GetSection("MicrosoftAppPassword")?.Value;
-Settings.TranslatorTextAPIKey = Configuration.GetSection("TranslatorTextAPIKey")?.Value;
-Settings.BotVersion = Configuration.GetSection("BotVersion")?.Value;
-Settings.LuisAppId01 = Configuration.GetSection("LuisAppId01")?.Value;
-Settings.LuisName01 = Configuration.GetSection("LuisName01")?.Value;
-Settings.LuisAuthoringKey01 = Configuration.GetSection("LuisAuthoringKey01")?.Value;
-Settings.LuisEndpoint01 = Configuration.GetSection("LuisEndpoint01")?.Value;
-```
+    ```csharp
+    Settings.MicrosoftAppId = Configuration.GetSection("MicrosoftAppId")?.Value;
+    Settings.MicrosoftAppPassword = Configuration.GetSection("MicrosoftAppPassword")?.Value;
+    Settings.TranslatorTextAPIKey = Configuration.GetSection("TranslatorTextAPIKey")?.Value;
+    Settings.BotVersion = Configuration.GetSection("BotVersion")?.Value;
+    Settings.LuisAppId01 = Configuration.GetSection("LuisAppId01")?.Value;
+    Settings.LuisName01 = Configuration.GetSection("LuisName01")?.Value;
+    Settings.LuisAuthoringKey01 = Configuration.GetSection("LuisAuthoringKey01")?.Value;
+    Settings.LuisEndpoint01 = Configuration.GetSection("LuisEndpoint01")?.Value;
+    ```
+    <b>Note:</b> This code provides the correct settings from the `appsettings.json` file.
 
-<b>Note:</b> This code provides the correct settings from the `appsettings.json` file.
+2. In the Startup.cs file, search for: `// TODO: ADD ACCESSOR CONFIGURATION` and replace the line with:
 
-2. In the Startup.cs file replace line 77 with:
-
-```csharp
-var luisServices = new Dictionary<string, LuisRecognizer>();
-var app = new LuisApplication(Settings.LuisAppId01, Settings.LuisAuthoringKey01, Settings.LuisEndpoint01);
-var recognizer = new LuisRecognizer(app);
-luisServices.Add(Settings.LuisName01, recognizer);
-```
-
-3. In the Startup.cs file replace line 81 with:
-
-```csharp
-var accessors = new BotAccessors(conversationState, userState, luisServices)
-```
-
-<b>Note:</b> These changes provides the correct configuration required to consume LUIS service from the bot and configure the accessor object.
-
-4. In the Startup.cs file replace line 83 with:
-
-```csharp
-ConversationDialogState = conversationState.CreateProperty<DialogState>("DialogState"),
-LanguagePreference = userState.CreateProperty<string>("LanguagePreference"),
-IsReadyForLUISPreference = userState.CreateProperty<bool>("IsReadyForLUISPreference")
-```
-
-<b>Note:</b> This code provides the correct configuration for the accessors, LanguagePreference and IsReadyForLUISPreference will be use as part of the userState object.
-
-5. In the Bot.cs file replace line 39 with:
-
-```csharp
-await dialogContext.BeginDialogAsync("MainDialog", null, cancellationToken);
-```
-
-<b>Note:</b> This code provides the initialization for the first dialog in the bot, everything starts from here.
-
-6. In the Bot.cs file replace line 49 with:
-
-```csharp
-await accessors.IsReadyForLUISPreference.DeleteAsync(turnContext);
-await accessors.LanguagePreference.DeleteAsync(turnContext);
-await dialogContext.EndDialogAsync();
-await dialogContext.BeginDialogAsync("MainDialog", null, cancellationToken);
-```
-
-<b>Note:</b> This code provides the end and begin of the dialog, deleting all values from preferences.
-
-7. In the Bot.cs file replace line 63 with:
-
-```csharp
-string userLanguage = await accessors.LanguagePreference.GetAsync(turnContext, () => { return string.Empty; });
-turnContext.Activity.Text = await TranslatorHelper.TranslateSentenceAsync(turnContext.Activity.Text, userLanguage, "en");
-await turnContext.SendActivityAsync($"Sending to LUIS -> {turnContext.Activity.Text}");
-
-// LUIS
-var recognizerResult = await accessors.LuisServices[Settings.LuisName01].RecognizeAsync(turnContext, cancellationToken);
-var topIntent = recognizerResult?.GetTopScoringIntent();
-if (topIntent != null && topIntent.HasValue && topIntent.Value.intent != "None")
-{
-    await ProcessIntentAsync(turnContext, topIntent.Value.intent, topIntent.Value.score, cancellationToken);
-}
-else
-{
-    var response = @"No LUIS intents were found.";
-    var message = await TranslatorHelper.TranslateSentenceAsync(response, "en", userLanguage);
-    await turnContext.SendActivityAsync(message);
-}
-```
-
-<b>Note:</b> This code provides the configuration required to call LUIS service using the Bot Builder SDK identify the correct top intent and the top score related with the utterance sent.
-
-8. In the Bot.cs file replace line 83 with:
-
-```csharp
-animationCard = new AnimationCard
-{
-Title = $"Intent: {intent}",
-Subtitle = $"Score: {score}",
-Media = new List<MediaUrl>
-{
-    new MediaUrl()
+    ```csharp
+    services.AddSingleton(sp =>
     {
-        Url = "https://i.gifer.com/HwZb.gif",
-    },
-},
-};
+        // We need to grab the conversationState we added on the options in the previous step
+        var options = sp.GetRequiredService<IOptions<BotFrameworkOptions>>().Value;
+        if (options == null)
+        {
+            throw new InvalidOperationException("BotFrameworkOptions must be configured prior to setting up the State Accessors");
+        }
 
-reply.Attachments.Add(animationCard.ToAttachment());
-```
+        var conversationState = options.State.OfType<ConversationState>().FirstOrDefault();
+        if (conversationState == null)
+        {
+            throw new InvalidOperationException("ConversationState must be defined and added before adding conversation-scoped state accessors.");
+        }
 
-<b>Note:</b> This code provides the animation card for Calendar_Add intent.
+        var userState = options.State.OfType<UserState>().FirstOrDefault();
+        if (userState == null)
+        {
+            throw new InvalidOperationException("UserState must be defined and added before adding user-scoped state accessors.");
+        }
 
-9. In the dialogs\LanguageDialog.cs replace line 20 with:
+        var luisServices = new Dictionary<string, LuisRecognizer>();
+        var app = new LuisApplication(Settings.LuisAppId01, Settings.LuisAuthoringKey01, Settings.LuisEndpoint01);
+        var recognizer = new LuisRecognizer(app);
+        luisServices.Add(Settings.LuisName01, recognizer);
 
-```csharp
-RequestPhraseDialog,
-ResponsePhraseDialog,
-EndLanguageDialog
-```
+        // Create the custom state accessor.
+        // State accessors enable other components to read and write individual properties of state.
+        var accessors = new BotAccessors(conversationState, userState, luisServices)
+        {
+            ConversationDialogState = conversationState.CreateProperty<DialogState>("DialogState"),
+            LanguagePreference = userState.CreateProperty<string>("LanguagePreference"),
+            IsReadyForLUISPreference = userState.CreateProperty<bool>("IsReadyForLUISPreference")
+        };
 
-<b>Note:</b> This code provides the waterfall sequence that will be executed by the LanguageDialog.
+        return accessors;
+    });
+    ```
 
-10. In the dialogs\LanguageDialog.cs replace line 28 with:
+    <b>Note:</b> These changes provides the correct configuration required to consume LUIS service from the bot and configure the accessor object, in addition, provides the correct configuration for the accessors, LanguagePreference and IsReadyForLUISPreference will be use as part of the userState object.
 
-```csharp
-if (promptContext.Recognized.Value == null)
-{
-    await promptContext.Context.SendActivityAsync($"Sorry, but I'm expecting an string, send me another phrase");
-}
-else
-{
-    var value = promptContext.Recognized.Value;
-    if (value.Length < 4)
+3. In the Bot.cs file, search for: `// TODO: BEGIN INITIAL DIALOG` and replace the line with:
+
+    ```csharp
+    await dialogContext.BeginDialogAsync("MainDialog", null, cancellationToken);
+    ```
+
+    <b>Note:</b> This code provides the initialization for the first dialog in the bot, everything starts from here.
+
+6. In the Bot.cs file, search for: `// TODO: RESET DIALOG` and replace the line with:
+
+    ```csharp
+    await accessors.IsReadyForLUISPreference.DeleteAsync(turnContext);
+    await accessors.LanguagePreference.DeleteAsync(turnContext);
+    await dialogContext.EndDialogAsync();
+    await dialogContext.BeginDialogAsync("MainDialog", null, cancellationToken);
+    ```
+
+    <b>Note:</b> This code provides the end and begin of the dialog, deleting all values from preferences.
+
+7. In the Bot.cs file, search for: `// TODO: CONFIGURE LUIS` and replace the line with:
+
+    ```csharp
+    string userLanguage = await accessors.LanguagePreference.GetAsync(turnContext, () => { return string.Empty; });
+    turnContext.Activity.Text = await TranslatorHelper.TranslateSentenceAsync(turnContext.Activity.Text, userLanguage, "en");
+    await turnContext.SendActivityAsync($"Sending to LUIS -> {turnContext.Activity.Text}");
+
+    // LUIS
+    var recognizerResult = await accessors.LuisServices[Settings.LuisName01].RecognizeAsync(turnContext, cancellationToken);
+    var topIntent = recognizerResult?.GetTopScoringIntent();
+    if (topIntent != null && topIntent.HasValue && topIntent.Value.intent != "None")
     {
-        await promptContext.Context.SendActivityAsync("Your phrase must be at least 4 characters long");
+        await ProcessIntentAsync(turnContext, topIntent.Value.intent, topIntent.Value.score, cancellationToken);
     }
     else
     {
-        return true;
+        var response = @"No LUIS intents were found.";
+        var message = await TranslatorHelper.TranslateSentenceAsync(response, "en", userLanguage);
+        await turnContext.SendActivityAsync(message);
     }
-}
-```
+    ```
 
-<b>Note:</b> This code provides the validations required for the prompt used in RequestPhraseDialog.
+    <b>Note:</b> This code provides the configuration required to call LUIS service using the Bot Builder SDK identify the correct top intent and the top score related with the utterance sent.
 
-11. In the dialogs\LanguageDialog.cs replace line 59 with:
+8. In the Bot.cs file, search for: `// TODO: ADD ANIMATION CARD` and replace the line with:
 
-```csharp
-await accessors.LanguagePreference.SetAsync(step.Context, step.ActiveDialog.State["language"].ToString());
-await accessors.IsReadyForLUISPreference.SetAsync(step.Context, true);
-await accessors.UserState.SaveChangesAsync(step.Context, false, cancellationToken);
-```
+    ```csharp
+    animationCard = new AnimationCard
+    {
+    Title = $"Intent: {intent}",
+    Subtitle = $"Score: {score}",
+    Media = new List<MediaUrl>
+    {
+        new MediaUrl()
+        {
+            Url = "https://i.gifer.com/HwZb.gif",
+        },
+    },
+    };
 
-<b>Note:</b> This code provides the routine to save the preferences before end the LanguageDialog and return to MainDialog.
+    reply.Attachments.Add(animationCard.ToAttachment());
+    ```
+
+    <b>Note:</b> This code provides the animation card for Calendar_Add intent.
+
+9. In the dialogs\LanguageDialog.cs file, search for: `// TODO: ADD WATERFALLDIALOGS` and replace the line with:
+
+    ```csharp
+    RequestPhraseDialog,
+    ResponsePhraseDialog,
+    EndLanguageDialog
+    ```
+
+    <b>Note:</b> This code provides the waterfall sequence that will be executed by the LanguageDialog.
+
+10. In the dialogs\LanguageDialog.cs file, search for: `// TODO: ADD PROMPT VALIDATIONS` and replace the line with:
+
+    ```csharp
+    if (promptContext.Recognized.Value == null)
+    {
+        await promptContext.Context.SendActivityAsync($"Sorry, but I'm expecting an string, send me another phrase");
+    }
+    else
+    {
+        var value = promptContext.Recognized.Value;
+        if (value.Length < 4)
+        {
+            await promptContext.Context.SendActivityAsync("Your phrase must be at least 4 characters long");
+        }
+        else
+        {
+            return true;
+        }
+    }
+    ```
+
+    <b>Note:</b> This code provides the validations required for the prompt used in RequestPhraseDialog.
+
+11. In the dialogs\LanguageDialog.cs file, search for: `// TODO: SAVE DIALOG PREFERENCES` and replace the line with:
+
+    ```csharp
+    await accessors.LanguagePreference.SetAsync(step.Context, step.ActiveDialog.State["language"].ToString());
+    await accessors.IsReadyForLUISPreference.SetAsync(step.Context, true);
+    await accessors.UserState.SaveChangesAsync(step.Context, false, cancellationToken);
+    ```
+
+    <b>Note:</b> This code provides the routine to save the preferences before end the LanguageDialog and return to MainDialog.
 
 #### Running the bot
 

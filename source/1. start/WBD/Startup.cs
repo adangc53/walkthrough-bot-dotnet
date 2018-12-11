@@ -36,8 +36,7 @@ namespace WBD
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            // Retrieve configuration from sections
-            // TODO: ADD SETTINGS CONFIGURATION
+            // TODO: ADD SETTINGS
 
             IStorage storage = new MemoryStorage();
 
@@ -54,38 +53,7 @@ namespace WBD
                 options.Middleware.Add(new ShowTypingMiddleware());
             });
 
-            services.AddSingleton(sp =>
-            {
-                // We need to grab the conversationState we added on the options in the previous step
-                var options = sp.GetRequiredService<IOptions<BotFrameworkOptions>>().Value;
-                if (options == null)
-                {
-                    throw new InvalidOperationException("BotFrameworkOptions must be configured prior to setting up the State Accessors");
-                }
-
-                var conversationState = options.State.OfType<ConversationState>().FirstOrDefault();
-                if (conversationState == null)
-                {
-                    throw new InvalidOperationException("ConversationState must be defined and added before adding conversation-scoped state accessors.");
-                }
-
-                var userState = options.State.OfType<UserState>().FirstOrDefault();
-                if (userState == null)
-                {
-                    throw new InvalidOperationException("UserState must be defined and added before adding user-scoped state accessors.");
-                }
-
-                // TODO: ADD LUIS CONFIGURATION
-
-                // Create the custom state accessor.
-                // State accessors enable other components to read and write individual properties of state.
-                var accessors = new BotAccessors(conversationState, userState, null)
-                {
-                    // TODO: ADD ACCESSORS CONFIGURATION
-                };
-
-                return accessors;
-            });
+            // TODO: ADD ACCESSOR CONFIGURATION
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
