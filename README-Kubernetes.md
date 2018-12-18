@@ -1,4 +1,4 @@
-## Creating the Docker container and Kubernetes cluster for the bot
+## Bot on Kubernetes
 
 #### Installing Azure CLI
 
