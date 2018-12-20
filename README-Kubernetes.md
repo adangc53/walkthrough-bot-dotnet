@@ -514,7 +514,7 @@ Once we have configured the Azure CLI, its time to open a terminal.
 10. Open a terminal in the folder `akswbddev` and create the secret.
 
     ```bash
-    kubectl create secret generic secret-appsettings --from-file=appsettings.secrets.json
+    kubectl create secret generic secret-appsettings-akswbddev --from-file=appsettings.secrets.json
     ```
 
 11. In the same temporal folder `akswbddev` create a new json file: `deployment.yaml`.
@@ -550,7 +550,7 @@ Once we have configured the Azure CLI, its time to open a terminal.
           volumes:
           - name: secrets
             secret:
-              secretName: secret-appsettings
+              secretName: secret-appsettings-akswbddev
     ```
 
     This file is responsible to create the deployment, you can see with detail how many replicas (instances) will have the deployment, the secret used for pulling the image and the secret for appsettings.
@@ -592,7 +592,13 @@ Once we have configured the Azure CLI, its time to open a terminal.
     helm install stable/nginx-ingress --namespace kube-system --set controller.replicaCount=2 --set rbac.create=false
     ```
 
-17. You can see the ingress controllers instances.
+17. Let's install the certificate manager using helm.
+
+    ```bash
+    helm install stable/cert-manager --namespace kube-system --set ingressShim.defaultIssuerName=letsencrypt-prod --set ingressShim.defaultIssuerKind=ClusterIssuer --set rbac.create=false --set serviceAccount.create=false
+    ```
+
+18. You can see the ingress controllers instances.
 
     ```bash
     kubectl get service -l app=nginx-ingress --namespace kube-system
@@ -608,16 +614,20 @@ Once we have configured the Azure CLI, its time to open a terminal.
 
     <b>Note:</b> It's important to keep save the external ip address, we are going to use it in the next step.
 
-18. In the same temporal folder `akswbddev` create a new bash file: `deployment.sh`, and replace with the external-ip address assigned to the nginx-ingress controller.
+19. Let's create a public unique DNS alias with the following structure: wbd-aks-{alias}, e.g. wbd-aks-rcervantes.
+
+    <b>Note:</b> It's important to keep save the public unique DNS alias, we are going to use it in the following steps.
+
+20. In the same temporal folder `akswbddev` create a new bash file: `deployment.sh`, add the external-ip address assigned by the nginx-ingress controller and add the public unique DNS alias.
 
     ```bash
     #!/bin/bash
 
     # Public IP address of your ingress controller
-    IP="INGRESS EXTERNAL IP ADDRESS"
+    IP="ADD THE INGRESS EXTERNAL IP ADDRESS"
 
     # Name to associate with public IP address
-    DNSNAME="wbd-aks-ingress"
+    DNSNAME="ADD THE PUBLIC UNIQUE DNS ALIAS"
 
     # Get the resource-id of the public ip
     PUBLICIPID=$(az network public-ip list --query "[?ipAddress!=null]|[?contains(ipAddress, '$IP')].[id]" --output tsv)
@@ -626,7 +636,7 @@ Once we have configured the Azure CLI, its time to open a terminal.
     az network public-ip update --ids $PUBLICIPID --dns-name $DNSNAME
     ```
 
-19. Then execute the bash file.
+20. Then execute the bash file.
 
     ```bash
     sh ./deployment.sh
@@ -676,12 +686,6 @@ Once we have configured the Azure CLI, its time to open a terminal.
     }
     ```
 
-20. Let's install the certificate manager using helm.
-
-    ```bash
-    helm install stable/cert-manager --namespace kube-system --set ingressShim.defaultIssuerName=letsencrypt-prod --set ingressShim.defaultIssuerKind=ClusterIssuer --set rbac.create=false --set serviceAccount.create=false
-    ```
-
 21. In the same temporal folder `akswbddev` create the certificate cluster issuer yaml file: `cluster-issuer.yaml`.
 
     ```yaml
@@ -704,25 +708,23 @@ Once we have configured the Azure CLI, its time to open a terminal.
     kubectl apply -f cluster-issuer.yaml
     ```
 
-23. In the same temporal folder `akswbddev` create the certificate yaml file: `certificate.yaml`.
-
-    <b>Note:</b> In a real scenario we should be able to handle multiples certificates for each exposed application/service we want put on internet, this yaml file has the wbd preffix and suffix to avoid collisions with other exposed apps in the same Kubernetes cluster.
+23. In the same temporal folder `akswbddev` create the certificate yaml file: `certificate.yaml` and add the public unique DNS alias.
 
     ```yaml
     apiVersion: certmanager.k8s.io/v1alpha1
     kind: Certificate
     metadata:
-      name: tls-secret-wbd
+      name: certificate
     spec:
-      secretName: tls-secret-wbd
+      secretName: certificate
       dnsNames:
-      - wbd-aks-ingress.centralus.cloudapp.azure.com
+      - {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
       acme:
         config:
         - http01:
             ingressClass: nginx
           domains:
-          - wbd-aks-ingress.centralus.cloudapp.azure.com
+          - {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
       issuerRef:
         name: letsencrypt-prod
         kind: ClusterIssuer
@@ -734,19 +736,13 @@ Once we have configured the Azure CLI, its time to open a terminal.
     kubectl apply -f certificate.yaml
     ```
 
-25. Now let's expose the deployment to internet.
-
-    ```bash
-    kubectl expose deployment walkthrough-bot-dotnet --name=walkthrough-bot-dotnet
-    ```
-
-26. In the same temporal folder `akswbddev` create the ingress route yaml file: `ingress-route.yaml`.
+25. In the same temporal folder `akswbddev` create the ingress route yaml file: `ingress-route.yaml` and add the public unique DNS alias.
 
     ```yaml
     apiVersion: extensions/v1beta1
     kind: Ingress
     metadata:
-      name: walkthrough-bot-dotnet-ingress
+      name: ingress-route
       annotations:
         kubernetes.io/ingress.class: nginx
         certmanager.k8s.io/cluster-issuer: letsencrypt-prod
@@ -754,10 +750,10 @@ Once we have configured the Azure CLI, its time to open a terminal.
     spec:
       tls:
       - hosts:
-        - wbd-aks-ingress.centralus.cloudapp.azure.com
-        secretName: tls-secret-wbd
+        - {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
+        secretName: certificate
       rules:
-      - host: wbd-aks-ingress.centralus.cloudapp.azure.com
+      - host: {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
         http:
           paths:
           - path: /
@@ -766,13 +762,19 @@ Once we have configured the Azure CLI, its time to open a terminal.
               servicePort: 80
     ```
 
-27. Let's execute the yaml definition.
+26. Let's execute the yaml definition.
 
     ```bash
     kubectl apply -f ingress-route.yaml
     ```
 
-28. If you do the previous steps correctly you will be able to access with a valid HTTPS certificate in your browser: https://wbd-aks-ingress.centralus.cloudapp.azure.com.
+27. Now let's expose the deployment to internet.
+
+    ```bash
+    kubectl expose deployment walkthrough-bot-dotnet --name=walkthrough-bot-dotnet
+    ```
+
+28. If you do the previous steps correctly you will be able to access with a valid HTTPS certificate in your browser: `https://{PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com`.
 
     <div style="text-align:center">
         <img src="http://rcervantes.me/images/walkthrough-bot-dotnet-kubernetes-https.png" />
