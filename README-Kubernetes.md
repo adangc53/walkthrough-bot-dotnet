@@ -571,9 +571,9 @@ Once we have configured the Azure CLI, its time to open a terminal.
 
     <b>Note:</b> Remember, the Azure Web App Bot is pointing to the HTTPS endpoint exposed by the App Service, our goal is replicate the HTTPS endpoint with a external and secure load balancer in Kubernetes to allow Web App Bot reach the logic of the bot.
 
-14. It's time to secure the http binding. To perform this task we need to create an HTTPS ingress controller using HELM, it's important to mention that I had some issues using HELM 2.12.0 so I suggest force the installation to use 2.11.0 (This issue is documented: https://github.com/MicrosoftDocs/azure-docs/issues/21067).
+14. It's time to secure the http binding, to perform this task we need to create an HTTPS ingress controller using HELM, it's important to mention that I had some issues using HELM 2.12.0, I suggest force the HELM installation to use the version: 2.11.0, the issue is already documented here: https://github.com/MicrosoftDocs/azure-docs/issues/21067.
 
-    You need to install HELM: 
+    Installing HELM: 
 
     - For Windows: https://github.com/helm/helm/releases/tag/v2.11.0
     - For mac: 
