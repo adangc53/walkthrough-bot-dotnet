@@ -630,7 +630,7 @@ Once we have configured the Azure CLI, its time to open a terminal.
     ```
 
     ```bash
-    helm install stable/cert-manager --namespace kube-system --set ingressShim.defaultIssuerName=letsencrypt-prod --set ingressShim.defaultIssuerKind=ClusterIssuer --set rbac.create=false --set serviceAccount.create=false --set createCustomResource=false
+    helm install stable/cert-manager --namespace kube-system --set ingressShim.defaultIssuerName=letsencrypt-prod --set ingressShim.defaultIssuerKind=ClusterIssuer --set rbac.create=false --set serviceAccount.create=false 
     ```
 
     <b>Note:</b> In case you have any problem with the packages, you can use: `helm list` and `helm delete --purge [package]` to delete the package from kubernetes.
