@@ -571,32 +571,69 @@ Once we have configured the Azure CLI, its time to open a terminal.
 
     <b>Note:</b> Remember, the Azure Web App Bot is pointing to the HTTPS endpoint exposed by the App Service, our goal is replicate the HTTPS endpoint with a external and secure load balancer in Kubernetes to allow Web App Bot reach the logic of the bot.
 
-14. It's time to secure the http binding. To perform this task we can create an HTTPS ingress controller.
+14. It's time to secure the http binding. To perform this task we need to create an HTTPS ingress controller using HELM, it's important to mention that I had some issues using HELM 2.12.0 so I suggest force the installation to use 2.11.0 (This issue is documented: https://github.com/MicrosoftDocs/azure-docs/issues/21067).
 
     You need to install HELM: 
 
-    - For Windows: Download & Install, then configure environment variables for the helm folder path.
-    - For mac: brew install kubernetes-helm
+    - For Windows: https://github.com/helm/helm/releases/tag/v2.11.0
+    - For mac: 
+
+        If it's the first time you install it:
+
+        ```bash
+        brew install https://raw.githubusercontent.com/Homebrew/homebrew-core/ee94af74778e48ae103a9fb080e26a6a2f62d32c/Formula/kubernetes-helm.rb
+        ```
+
+        If you had issues because you already installed the version 2.12.0 or 2.12.1.
+
+        ```bash
+        brew unlink kubernetes-helm  
+        brew uninstall kubernetes-helm --force
+        brew install https://raw.githubusercontent.com/Homebrew/homebrew-core/ee94af74778e48ae103a9fb080e26a6a2f62d32c/Formula/kubernetes-helm.rb
+        ```
 
     If you have doubts, take a look here: https://docs.helm.sh/using_helm/#installing-helm.
 
-15. Open the terminal and initialize Helm and Tiller.
+15. Initialize Helm and Tiller.
 
     ```bash
     helm init
     ```
 
-16. Let's install the nginx-ingress.
+16. Validate the version of HELM:
+
+    ```bash
+    helm version
+    ```
+
+    You should see something like this:
+
+    ```bash
+    Client: &version.Version{SemVer:"v2.11.0", GitCommit:"2e55dbe1fdb5fdb96b75ff144a339489417b146b", GitTreeState:"clean"}
+    Server: &version.Version{SemVer:"v2.11.0", GitCommit:"2e55dbe1fdb5fdb96b75ff144a339489417b146b", GitTreeState:"clean"}
+    ```
+
+    <b>Note:</b> You can see that Client and Server version are: 2.11.0.
+
+    In case you have an issue looking inconsistencies, try doing next:
+    
+    ```bash
+    helm reset --force
+    helm init
+    helm version
+    ```
+
+17. Let's install the nginx-ingress and certificate manager with helm.
 
     ```bash
     helm install stable/nginx-ingress --namespace kube-system --set controller.replicaCount=2 --set rbac.create=false
     ```
 
-17. Let's install the certificate manager using helm.
-
     ```bash
-    helm install stable/cert-manager --namespace kube-system --set ingressShim.defaultIssuerName=letsencrypt-prod --set ingressShim.defaultIssuerKind=ClusterIssuer --set rbac.create=false --set serviceAccount.create=false
+    helm install stable/cert-manager --namespace kube-system --set ingressShim.defaultIssuerName=letsencrypt-prod --set ingressShim.defaultIssuerKind=ClusterIssuer --set rbac.create=false --set serviceAccount.create=false --set createCustomResource=false
     ```
+
+    <b>Note:</b> In case you have any problem with the packages, you can use: `helm delete --purge [package]` to delete the package from kubernetes.
 
 18. You can see the ingress controllers instances.
 
@@ -636,7 +673,7 @@ Once we have configured the Azure CLI, its time to open a terminal.
     az network public-ip update --ids $PUBLICIPID --dns-name $DNSNAME
     ```
 
-20. Then execute the bash file.
+21. Then execute the bash file.
 
     ```bash
     sh ./deployment.sh
@@ -686,7 +723,7 @@ Once we have configured the Azure CLI, its time to open a terminal.
     }
     ```
 
-21. In the same temporal folder `akswbddev` create the certificate cluster issuer yaml file: `cluster-issuer.yaml`.
+22. In the same temporal folder `akswbddev` create the certificate cluster issuer yaml file: `cluster-issuer.yaml`.
 
     ```yaml
     apiVersion: certmanager.k8s.io/v1alpha1
@@ -702,13 +739,13 @@ Once we have configured the Azure CLI, its time to open a terminal.
         http01: {}
     ```
 
-22. Let's execute the yaml definition.
+23. Let's execute the yaml definition.
 
     ```bash
     kubectl apply -f cluster-issuer.yaml
     ```
 
-23. In the same temporal folder `akswbddev` create the certificate yaml file: `certificate.yaml` and add the public unique DNS alias.
+24. In the same temporal folder `akswbddev` create the certificate yaml file: `certificate.yaml`, add the public unique DNS alias and the cluster region.
 
     ```yaml
     apiVersion: certmanager.k8s.io/v1alpha1
@@ -718,25 +755,25 @@ Once we have configured the Azure CLI, its time to open a terminal.
     spec:
       secretName: certificate
       dnsNames:
-      - {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
+      - {ADD PUBLIC UNIQUE DNS ALIAS}.{ADD CLUSTER REGION e.g. centralus}.cloudapp.azure.com
       acme:
         config:
         - http01:
             ingressClass: nginx
           domains:
-          - {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
+          - {ADD PUBLIC UNIQUE DNS ALIAS}.{ADD CLUSTER REGION e.g. centralus}.cloudapp.azure.com
       issuerRef:
         name: letsencrypt-prod
         kind: ClusterIssuer
     ```
 
-24. Let's execute the yaml definition.
+25. Let's execute the yaml definition.
 
     ```bash
     kubectl apply -f certificate.yaml
     ```
 
-25. In the same temporal folder `akswbddev` create the ingress route yaml file: `ingress-route.yaml` and add the public unique DNS alias.
+26. In the same temporal folder `akswbddev` create the ingress route yaml file: `ingress-route.yaml` add the public unique DNS alias and the cluster region.
 
     ```yaml
     apiVersion: extensions/v1beta1
@@ -750,10 +787,10 @@ Once we have configured the Azure CLI, its time to open a terminal.
     spec:
       tls:
       - hosts:
-        - {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
+        - {ADD PUBLIC UNIQUE DNS ALIAS}.{ADD CLUSTER REGION e.g. centralus}.cloudapp.azure.com
         secretName: certificate
       rules:
-      - host: {ADD PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com
+      - host: {ADD PUBLIC UNIQUE DNS ALIAS}.{ADD CLUSTER REGION e.g. centralus}.cloudapp.azure.com
         http:
           paths:
           - path: /
@@ -762,19 +799,19 @@ Once we have configured the Azure CLI, its time to open a terminal.
               servicePort: 80
     ```
 
-26. Let's execute the yaml definition.
+27. Let's execute the yaml definition.
 
     ```bash
     kubectl apply -f ingress-route.yaml
     ```
 
-27. Now let's expose the deployment to internet.
+28. Now let's expose the deployment to internet.
 
     ```bash
     kubectl expose deployment walkthrough-bot-dotnet --name=walkthrough-bot-dotnet
     ```
 
-28. If you do the previous steps correctly you will be able to access with a valid HTTPS certificate in your browser: `https://{PUBLIC UNIQUE DNS ALIAS}.centralus.cloudapp.azure.com`.
+29. If you do the previous steps correctly you will be able to access with a valid HTTPS certificate in your browser: `https://{PUBLIC UNIQUE DNS ALIAS}.{ADD CLUSTER REGION e.g. centralus}.cloudapp.azure.com`.
 
     <div style="text-align:center">
         <img src="http://rcervantes.me/images/walkthrough-bot-dotnet-kubernetes-https.png" />
@@ -786,13 +823,13 @@ Once we have configured the Azure CLI, its time to open a terminal.
     - kubectl delete -f cluster-issuer.yaml
     - kubectl delete -f ingress-route.yaml
 
-29. Now it's simple, you can go to your Web App Bot Settings replace the App Service url with the Kubernetes exposed service https url and save the changes.
+30. Now it's simple, you can go to your Web App Bot Settings replace the App Service url with the Kubernetes exposed service https url and save the changes.
 
   <div style="text-align:center">
       <img src="http://rcervantes.me/images/walkthrough-bot-dotnet-kubernetes-webappbot.png" />
   </div>
 
-30. Bang!! You are now running the Bot in a cluster of 5 instances in Kubernetes.
+31. Bang!! You are now running the Bot in a cluster of 5 instances in Kubernetes.
 
   <div style="text-align:center">
       <img src="http://rcervantes.me/images/walkthrough-bot-dotnet-kubernetes-webappbot2.png" />
